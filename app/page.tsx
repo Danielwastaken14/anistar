@@ -112,6 +112,34 @@ export default async function HomePage() {
                 Explore characters <span className="inline-block transition group-hover:translate-x-1">→</span>
               </div>
             </Link>
+
+             <Link
+              href="/anime"
+              className="group rounded-3xl border border-[#73E8F4]/20 bg-[#101A2B]/90 p-6 transition hover:-translate-y-1 hover:border-[#73E8F4]/60 hover:bg-[#142035]"
+            >
+              <div className="text-3xl">🌟</div>
+              <h2 className="mt-4 text-xl font-extrabold">Anime Guesser</h2>
+              <p className="mt-2 text-sm leading-6 text-[#AAB3D1]">
+                Guess the anime based on the clues.
+              </p>
+              <div className="mt-6 font-bold text-[#73E8F4]">
+                Play anime guesser <span className="inline-block transition group-hover:translate-x-1">→</span>
+              </div>
+            </Link>
+
+            <Link
+              href="/screenshots"
+              className="group rounded-3xl border border-[#FF70B7]/20 bg-[#151329]/90 p-6 transition hover:-translate-y-1 hover:border-[#FF70B7]/60 hover:bg-[#1A1732]"
+            >
+              <div className="text-3xl">🎴</div>
+              <h2 className="mt-4 text-xl font-extrabold">Screenshots Challenge</h2>
+              <p className="mt-2 text-sm leading-6 text-[#AAB3D1]">
+                Identify an anime from screenshots.
+              </p>
+              <div className="mt-6 font-bold text-[#FF70B7]">
+                Play screenshots mode <span className="inline-block transition group-hover:translate-x-1">→</span>
+              </div>
+            </Link>
           </div>
 
           {!session && (

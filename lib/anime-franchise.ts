@@ -2,6 +2,7 @@ export type FranchiseMedia = {
   id: number;
   type?: string | null;
   format?: string | null;
+  startDate?: { year?: number | null } | null;
   title: {
     romaji: string | null;
     english: string | null;
@@ -15,6 +16,8 @@ export type FranchiseMedia = {
   } | null;
 };
 
+const MAIN_SERIES_FORMATS = new Set(["TV", "TV_SHORT"]);
+
 export function getAnimeTitle(media: FranchiseMedia): string {
   return (
     media.title.english ||
@@ -24,73 +27,69 @@ export function getAnimeTitle(media: FranchiseMedia): string {
   );
 }
 
-const MAIN_SERIES_FORMATS = new Set(["TV", "TV_SHORT"]);
+function isMainSeries(media: FranchiseMedia): boolean {
+  return (
+    media.type === "ANIME" &&
+    MAIN_SERIES_FORMATS.has(media.format ?? "")
+  );
+}
 
-export function getCanonicalAnime(
-  media: FranchiseMedia
-): FranchiseMedia {
-  let current = media;
-  const visited = new Set<number>([media.id]);
+function yearOf(media: FranchiseMedia): number {
+  return media.startDate?.year ?? Number.POSITIVE_INFINITY;
+}
 
-  for (let depth = 0; depth < 5; depth++) {
-    const prequel = current.relations?.edges.find(
-      ({ relationType, node }) =>
-        relationType === "PREQUEL" &&
-        node?.type === "ANIME" &&
-        !visited.has(node.id)
-    )?.node;
-
-    if (!prequel) {
-      break;
-    }
-
-    visited.add(prequel.id);
-    current = prequel;
-  }
-
-  // If we ended up at a main TV series, use it.
-  if (
-    current.type === "ANIME" &&
-    MAIN_SERIES_FORMATS.has(current.format ?? "")
-  ) {
-    return current;
-  }
-
-  // Otherwise, walk backward through the chain again looking
-  // for the first main TV/TV_SHORT entry.
-  let fallback: FranchiseMedia | null = null;
-
+/**
+ * Resolve a sequel to the earliest TV entry reachable through PREQUEL edges.
+ * This deliberately does not traverse SPIN_OFF, SIDE_STORY, or OTHER:
+ * those links can connect different shows or continuities.
+ *
+ * When provided with only a partial AniList relation graph, resolution is
+ * necessarily partial. The character round route also checks ALL of the
+ * character's available anime appearances to find the original TV series.
+ */
+export function getCanonicalAnime(media: FranchiseMedia): FranchiseMedia {
   const queue: FranchiseMedia[] = [media];
-  const searched = new Set<number>([media.id]);
+  const visited = new Set<number>();
+  const candidates: FranchiseMedia[] = [];
 
-  while (queue.length > 0) {
-    const item = queue.shift()!;
+  // Bound traversal to avoid surprisingly large/cyclic graphs.
+  while (queue.length > 0 && visited.size < 100) {
+    const current = queue.shift()!;
+    if (visited.has(current.id)) continue;
+    visited.add(current.id);
 
-    for (const edge of item.relations?.edges ?? []) {
-      if (edge.relationType !== "PREQUEL" || !edge.node) {
-        continue;
-      }
+    if (isMainSeries(current)) candidates.push(current);
 
-      const node = edge.node;
-
-      if (searched.has(node.id)) {
-        continue;
-      }
-
-      searched.add(node.id);
-
+    for (const edge of current.relations?.edges ?? []) {
       if (
-        node.type === "ANIME" &&
-        MAIN_SERIES_FORMATS.has(node.format ?? "")
+        edge.relationType === "PREQUEL" &&
+        edge.node?.type === "ANIME" &&
+        !visited.has(edge.node.id)
       ) {
-        fallback = node;
-        queue.length = 0;
-        break;
+        queue.push(edge.node);
       }
-
-      queue.push(node);
     }
   }
 
-  return fallback ?? current;
+  if (candidates.length === 0) return media;
+
+  // Prefer the oldest known TV series in the sequel chain. When years aren't
+  // available, an entry with no visible prequel is the better root candidate.
+  candidates.sort((a, b) => {
+    const yearDifference = yearOf(a) - yearOf(b);
+    if (yearDifference !== 0) return yearDifference;
+
+    const aHasPrequel = (a.relations?.edges ?? []).some(
+      (edge) => edge.relationType === "PREQUEL" && edge.node?.type === "ANIME"
+    );
+    const bHasPrequel = (b.relations?.edges ?? []).some(
+      (edge) => edge.relationType === "PREQUEL" && edge.node?.type === "ANIME"
+    );
+    if (aHasPrequel !== bHasPrequel) return aHasPrequel ? 1 : -1;
+
+    if (a.format !== b.format) return a.format === "TV" ? -1 : 1;
+    return 0;
+  });
+
+  return candidates[0];
 }
